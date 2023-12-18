@@ -125,12 +125,14 @@ uint64_t host::echo(char * argv) // for getting values bigger than the 32 bits t
   char * line = NULL;
   FILE * in;
   char cmd[256];
-
+#ifdef _WIN32
+  sscanf(argv, "%llu", &value);
+#else
   sprintf(cmd, "echo $((%s))", argv);
 
   in = popen(cmd, "r");
   getline(&line, &len, in);
   value = atol(line);
-
+#endif
   return value;
 }

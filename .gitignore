@@ -8,3 +8,7 @@ cstest
 libcudasieve.a
 samples/sumPrimes
 samples/benchmark
+*.exe
+*.lib
+*.exp
+*.obj

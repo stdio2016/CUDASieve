@@ -1,0 +1,117 @@
+##
+## CUDA_DIR and LEGACY_CC_PATH may need to be changed, and fewer gpu
+## architectures specified in GPU_CODE will make a smaller executable.  These
+## variables are all located at the top of the file.
+## CSTest is a small utility to extensively test the output of cudasieve.
+## see src/cstest.cpp for more details.
+##
+
+# Location of the CUDA toolkit
+# On Windows, just specify a environment variable
+CUDA_DIR = "%CUDA_PATH%"
+# Location of the MSVC compiler for nvcc to use.  CUDA 12 supports MSVC 2022
+# If using an earlier version, it may be necessary to change to a different MSVC
+# compiler.
+LEGACY_CC_PATH = cl
+# Compute capability of the target GPU
+GPU_ARCH = compute_80
+GPU_CODE = sm_80
+
+# Compilers to use
+NVCC = nvcc
+CC = cl
+# Flags for the host compiler
+CCFLAGS = /O2 /std:c++14 /EHsc /c /utf-8
+WIGNORE =
+
+# Flags for nvcc
+# ptxas-options=-dlcm=cg (vs. default of ca) is about a 2% performance gain
+NVCC_FLAGS = -ccbin $(LEGACY_CC_PATH) -std=c++14 -arch=$(GPU_ARCH) -code=$(GPU_CODE) \
+--ptxas-options=-dlcm=cs -lineinfo -Xcompiler /utf-8
+
+INCLUDES = -I ./include/ -I ./src/ -I $(CUDA_DIR)/include/
+LIB_DIR = -L ./
+CC_LIBS = 
+NVCC_LIBS = -lcudart $(CC_LIBS)
+
+CLI_SRC_DIR = src\
+SRC_DIR = src\CUDASieve\
+NV_SRCS = src\CUDASieve\launch.cu src\CUDASieve\global.cu src\CUDASieve\primelist.cu
+OBJ_DIR = obj\
+
+## Cannot use device.cu here because it is #include linked to global.cu!
+## this is necessary because the nvcc linker sucks with device code!
+## linking device code will slow down GPU because it prevents GPU inline optimization
+#NV_SRCS = src/CUDASieve/global.cu src/CUDASieve/launch.cu src/CUDASieve/device.cu
+_MAIN_OBJ = main.obj
+MAIN_OBJ = $(patsubst %,$(OBJ_DIR)\\%,$(_MAIN_OBJ))
+_OBJS = host.obj cudasieve.obj
+OBJS = $(patsubst %,$(OBJ_DIR)\\%,$(_OBJS))
+_NVOBJS = launch.obj global.obj primelist.obj
+NVOBJS = $(patsubst %,$(OBJ_DIR)\\%,$(_NVOBJS))
+
+MAIN = cudasieve.exe
+CS_LIB = $(MAIN).lib
+
+all: obj\ $(MAIN) commands
+
+test: cstest.exe
+.SUFFIXES : .cu
+
+# Tack on a main() function for the CLI
+$(MAIN): $(MAIN_OBJ) $(CS_LIB)
+	@$(NVCC) $(NVCC_FLAGS) $(CC_LIBS) $(LIB_DIR) -l$(MAIN) $** -o $@
+	@echo "     CUDA     " $@
+
+# Linking to make a library
+$(CS_LIB): $(OBJS) $(NVOBJS)
+	@$(NVCC) $(NVCC_FLAGS) -lib $(INCLUDES) $** -o $@
+	@echo "     CUDALS   " $@
+
+{src\CUDASieve\}.cu{$(OBJ_DIR)}.obj:
+	@$(NVCC) $(NVCC_FLAGS) -c $(INCLUDES) -o $@ $<
+	@echo "     CUDA     " $@
+
+{src\CUDASieve\}.cpp{$(OBJ_DIR)}.obj:
+	@$(CC) $(CCFLAGS) $(INCLUDES) $(WIGNORE) /Fo$@ $<
+	@echo "     CXX      " $@
+
+{src\}.cpp{$(OBJ_DIR)}.obj:
+	@$(CC) $(CCFLAGS) $(INCLUDES) /Fo$@ $<
+	@echo "     CXX      " $@
+
+obj\:
+	-@mkdir obj
+	@echo "     DIR      " $@
+## The cudasieve testing utility depends on boost, openMP and primesieve.
+cstest.exe: src/cstest.cpp $(CS_LIB)
+	@$(NVCC) $(NVCC_FLAGS) $(INCLUDES) $(LIB_DIR) -O3 -Xcompiler /openmp -l$(MAIN) $(NVCC_LIBS) -lprimesieve $** -o cstest
+	@echo "     CXX      " $@
+
+commands: $(MAIN)
+	@echo ""
+	@echo  "    CUDASieve has been compiled. 'cudasieve --help' gives a list of options."
+	@echo  "    cstest runs correctness tests.  'make test' to compile"
+	@echo  "    Note: cstest depends on boost, openMP, and primesieve libraries"
+	@echo  "    'make samples' compiles the one sample.  Currently accepting"
+	@echo  "    ideas for more samples.  Have fun!"
+	@echo  ""
+
+clean:
+	del obj\*.obj
+	del *.lib
+	del cudasieve.exe
+	del cudasieve.exp
+	del cstest.exe
+	del cstest.exp
+	del include\CUDASieve\*.gch
+	del src\CUDASieve\*.gch
+
+# samples
+samples: samples/sumPrimes.exe samples/benchmark.exe
+
+samples/sumPrimes.exe : samples/sumPrimes.cu $(CS_LIB)
+	$(NVCC) $(NVCC_FLAGS) $(CC_LIBS) $(INCLUDES) $(LIB_DIR) -l$(MAIN) $** -o $@
+
+samples/benchmark.exe : samples/benchmark.cu $(CS_LIB)
+	$(NVCC) $(NVCC_FLAGS) $(CC_LIBS) $(INCLUDES) $(LIB_DIR) -l$(MAIN) $** -o $@

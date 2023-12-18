@@ -18,6 +18,9 @@ The naming convention for sieve sizes:
 #include <stdint.h>
 #include "host.hpp"
 // #include "CUDASieve/primeoutlist.cuh"
+#ifdef _WIN32
+#include <intrin.h>
+#endif
 
 #ifndef _CUDASIEVE_LAUNCH
 #define _CUDASIEVE_LAUNCH
@@ -34,6 +37,10 @@ __host__ __device__ static inline int64_t clzll(uint64_t x)
   uint64_t res;
 #ifdef __CUDA_ARCH__
   res = __clzll(x);
+#elif _WIN32
+  unsigned long a;
+  _BitScanReverse64(&a, x);
+  res = a;
 #else
   asm("lzcnt %1, %0" : "=l" (res) : "l" (x));
 #endif

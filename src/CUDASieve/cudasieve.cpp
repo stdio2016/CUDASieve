@@ -43,7 +43,7 @@ CudaSieve::CudaSieve(uint64_t bottom, uint64_t top, uint64_t range, bool devOnly
   setKernelParam();
 
   d_primeList = PrimeList::getSievingPrimes(maxPrime_, primeListLength, flags[30]);
-  if(top > (1ul << 40) || range != 0){
+  if(top > (1ull << 40) || range != 0){
     bigsieve.setParameters(*this);
     bigsieve.allocate();
     bigsieve.fillNextMult();
